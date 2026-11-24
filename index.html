@@ -1,1 +1,776 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarea 3 - Flexo-Compresión de Columnas (IN1118C - UCSC)</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --secondary: #2563eb;
+            --bg: #f8fafc;
+            --panel: #ffffff;
+            --border: #cbd5e1;
+            --text: #1e293b;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; padding: 0; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
+        header { background: var(--primary); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 1.2rem; }
+        header span { font-size: 0.85rem; opacity: 0.9; }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Panel Lateral */
+        .sidebar { width: 340px; background: var(--panel); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; flex-shrink: 0; }
+        .sidebar h2 { font-size: 1rem; color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin-top: 16px; margin-bottom: 10px; }
+        .sidebar h2:first-child { margin-top: 0; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 3px; }
+        .form-row { display: flex; gap: 8px; }
+        .form-row > div { flex: 1; }
+        input[type="number"], select { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.88rem; }
+        .summary-box { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-top: 8px; }
+        .layer-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; background: #f1f5f9; padding: 6px; border-radius: 4px; }
+        .layer-row input { width: 65px; }
+        button { background: var(--secondary); color: white; border: none; padding: 7px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+        button:hover { background: var(--primary); }
+        button.btn-sm { padding: 4px 8px; font-size: 0.78rem; }
+        button.btn-danger { background: #dc2626; }
+        button.btn-export { background: #059669; width: 100%; margin-top: 12px; padding: 10px; font-size: 0.9rem; }
 
+        /* Área Principal y Pestañas */
+        .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .tabs { display: flex; background: #e2e8f0; border-bottom: 1px solid var(--border); }
+        .tab-btn { padding: 12px 24px; background: transparent; color: var(--text); border: none; border-bottom: 3px solid transparent; border-radius: 0; font-size: 0.95rem; }
+        .tab-btn.active { background: var(--panel); color: var(--primary); border-bottom: 3px solid var(--primary); font-weight: bold; }
+        .tab-content { flex: 1; padding: 20px; overflow-y: auto; display: none; }
+        .tab-content.active { display: block; }
+
+        /* Tarjetas y Grillas */
+        .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .card h3 { margin-top: 0; font-size: 1rem; color: var(--primary); margin-bottom: 12px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+        .metric-badge { background: #f1f5f9; border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-size: 0.82rem; }
+        .metric-badge strong { color: var(--primary); }
+        .plot-box { width: 100%; height: 370px; }
+        .plot-sm { width: 100%; height: 240px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-top: 8px; }
+        th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; }
+        th { background: #f1f5f9; }
+        .status-ok { color: #059669; font-weight: bold; }
+        .status-fail { color: #dc2626; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>Análisis No Lineal y Diseño de Columnas de Hormigón Armado</h1>
+        <span>IN1118C Hormigón Armado I — UCSC (ACI 318-19 / NCh430)</span>
+    </div>
+    <div>
+        <button class="btn-export" style="margin:0;" onclick="exportCSV()">📥 Exportar Resultados (.CSV)</button>
+    </div>
+</header>
+
+<div class="main-container">
+    <!-- PANEL LATERAL GLOBAL -->
+    <aside class="sidebar">
+        <h2>1. Geometría de Sección</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Ancho b (mm)</label>
+                <input type="number" id="inp_b" value="400" min="100" step="10" oninput="updateAll()">
+            </div>
+            <div class="form-group">
+                <label>Alto h (mm)</label>
+                <input type="number" id="inp_h" value="500" min="100" step="10" oninput="updateAll()">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Recubrimiento al centroide d' (mm)</label>
+            <input type="number" id="inp_dp" value="50" min="20" step="5" oninput="updateAll()">
+        </div>
+
+        <h2>2. Armadura Longitudinal</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.8rem; color:#475569;">Capas (distribución uniforme o personalizada):</span>
+            <button class="btn-sm" onclick="addLayer()">+ Capa</button>
+        </div>
+        <div id="layers_container"></div>
+        <div class="summary-box" id="steel_summary">
+            A<sub>s</sub> total: <strong>0 mm²</strong> | Cuantía &rho;: <strong>0.00%</strong>
+        </div>
+
+        <h2>3. Propiedades de Materiales</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label>f'<sub>c</sub> (MPa)</label>
+                <input type="number" id="inp_fc" value="30" min="15" max="90" step="1" oninput="updateAll()">
+            </div>
+            <div class="form-group">
+                <label>f<sub>y</sub> (MPa)</label>
+                <input type="number" id="inp_fy" value="420" min="200" max="700" step="10" oninput="updateAll()">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>E<sub>s</sub> (MPa)</label>
+                <input type="number" id="inp_Es" value="200000" step="5000" oninput="updateAll()">
+            </div>
+            <div class="form-group">
+                <label>&epsilon;<sub>cu</sub> (Fibras)</label>
+                <input type="number" id="inp_ecu" value="0.003" step="0.0005" min="0.002" max="0.02" oninput="updateAll()">
+            </div>
+        </div>
+    </aside>
+
+    <!-- CONTENIDO CON 2 PESTAÑAS -->
+    <main class="content">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tabA', this)">Pestaña A: Análisis No Lineal M(&phi;) y P(M) por Fibras</button>
+            <button class="tab-btn" onclick="switchTab('tabB', this)">Pestaña B: Diseño Normativo Bloque de Whitney</button>
+        </div>
+
+        <!-- PESTAÑA A -->
+        <div id="tabA" class="tab-content active">
+            <div class="card">
+                <h3>1. Modelos Constitutivos &sigma;(&epsilon;) y Vista Previa</h3>
+                <div class="grid-3">
+                    <div>
+                        <div class="form-group">
+                            <label>Modelo Hormigón (Compresión)</label>
+                            <select id="sel_conc" onchange="toggleConfinement(); updateAll();">
+                                <option value="hognestad">Hognestad Modificado</option>
+                                <option value="mander">Mander / Kent & Park (Confinado)</option>
+                            </select>
+                        </div>
+                        <div id="conf_params" style="display:none; background:#f1f5f9; padding:8px; border-radius:4px; margin-bottom:8px;">
+                            <div class="form-row">
+                                <div><label>Estribo &phi; (mm)</label><input type="number" id="inp_db_h" value="10" oninput="updateAll()"></div>
+                                <div><label>Sep. s (mm)</label><input type="number" id="inp_s" value="100" oninput="updateAll()"></div>
+                                <div><label>f<sub>yh</sub> (MPa)</label><input type="number" id="inp_fyh" value="420" oninput="updateAll()"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Comportamiento en Tracción</label>
+                            <select id="sel_tens" onchange="updateAll()">
+                                <option value="ignore">Ignorar tracción</option>
+                                <option value="stiffening">Incluir f<sub>r</sub> + Tension Stiffening</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="form-group">
+                            <label>Modelo Acero Longitudinal</label>
+                            <select id="sel_steel" onchange="updateAll()">
+                                <option value="epp">Elastoplástico Perfecto</option>
+                                <option value="bilinear">Bilineal con Endurecimiento (E<sub>sh</sub>)</option>
+                                <option value="trilinear">Trilineal (Plataforma + Endurecimiento)</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>f<sub>su</sub> (MPa)</label>
+                                <input type="number" id="inp_fsu" value="630" oninput="updateAll()">
+                            </div>
+                            <div class="form-group">
+                                <label>&epsilon;<sub>su</sub></label>
+                                <input type="number" id="inp_esu" value="0.09" step="0.01" oninput="updateAll()">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div id="plot_constitutive" class="plot-sm"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>2. Control de Carga Axial y Gráficos Vinculados (120 Fibras)</h3>
+                <div style="display:flex; align-items:center; gap:16px; background:#eff6ff; padding:10px; border-radius:6px; margin-bottom:12px;">
+                    <label style="font-weight:bold; white-space:nowrap;">Carga Axial P (kN):</label>
+                    <input type="range" id="slider_P" min="-1500" max="6000" value="800" step="10" style="flex:1;" oninput="syncP('slider')">
+                    <input type="number" id="inp_P" value="800" step="10" style="width:110px;" oninput="syncP('input')">
+                    <span id="axial_ratio" style="font-weight:bold; color:var(--primary); white-space:nowrap;">P / (f'<sub>c</sub> A<sub>g</sub>) = 0.13</span>
+                </div>
+
+                <div class="metrics" id="mphi_metrics"></div>
+
+                <div class="grid-2" style="margin-top:12px;">
+                    <div>
+                        <div id="plot_mphi" class="plot-box"></div>
+                    </div>
+                    <div>
+                        <div id="plot_pm_fiber" class="plot-box"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA B -->
+        <div id="tabB" class="tab-content">
+            <div class="grid-2">
+                <div class="card">
+                    <h3>Diagrama de Interacción Normativo (ACI 318-19 / NCh430)</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label style="font-size:0.88rem; font-weight:600; cursor:pointer;">
+                            <input type="checkbox" id="chk_overlay" checked onchange="updateWhitney()"> Superponer curva P(M) por fibras (Pestaña A)
+                        </label>
+                        <span id="beta1_label" style="font-size:0.85rem; background:#f1f5f9; padding:4px 8px; border-radius:4px;">&beta;<sub>1</sub> = 0.85</span>
+                    </div>
+                    <div id="plot_whitney" class="plot-box" style="height:450px;"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Puntos Clave y Verificación de Solicitaciones (P<sub>u</sub>, M<sub>u</sub>)</h3>
+                    <table id="tbl_key_points">
+                        <thead>
+                            <tr><th>Punto Característico</th><th>c (mm)</th><th>P<sub>n</sub> (kN)</th><th>M<sub>n</sub> (kN·m)</th><th>&phi;</th><th>&phi;P<sub>n</sub> (kN)</th><th>&phi;M<sub>n</sub> (kN·m)</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+
+                    <h3 style="margin-top:20px;">Ingresar Solicitaciones Últimas (P<sub>u</sub>, M<sub>u</sub>)</h3>
+                    <div class="form-row" style="margin-bottom:8px;">
+                        <div><input type="number" id="inp_Pu" placeholder="Pu (kN)" value="1200"></div>
+                        <div><input type="number" id="inp_Mu" placeholder="Mu (kN·m)" value="220"></div>
+                        <div><button onclick="addLoad()">+ Agregar Par</button></div>
+                    </div>
+                    <table id="tbl_loads">
+                        <thead>
+                            <tr><th>Caso</th><th>P<sub>u</sub> (kN)</th><th>M<sub>u</sub> (kN·m)</th><th>Estado Diseño</th><th>Acción</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+// Estado inicial de armadura (4 capas simétricas de ejemplo) y cargas
+let steelLayers = [
+    { n: 3, db: 22, y: 50 },
+    { n: 2, db: 22, y: 183 },
+    { n: 2, db: 22, y: 317 },
+    { n: 3, db: 22, y: 450 }
+];
+let designLoads = [
+    { Pu: 1200, Mu: 220 },
+    { Pu: 2500, Mu: 310 }
+];
+let globalResults = { mphi: [], pm_fiber: [], pm_whitney: [] };
+
+function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+    window.dispatchEvent(new Event('resize'));
+}
+
+function toggleConfinement() {
+    const val = document.getElementById('sel_conc').value;
+    document.getElementById('conf_params').style.display = (val === 'mander') ? 'block' : 'none';
+}
+
+function renderLayersUI() {
+    const container = document.getElementById('layers_container');
+    container.innerHTML = '';
+    steelLayers.forEach((layer, idx) => {
+        const div = document.createElement('div');
+        div.className = 'layer-row';
+        div.innerHTML = `
+            <span style="font-size:0.75rem; font-weight:bold;">C${idx+1}</span>
+            <input type="number" value="${layer.n}" min="1" title="N° barras" onchange="steelLayers[${idx}].n=+this.value; updateAll();">
+            <span style="font-size:0.8rem;">&phi;</span>
+            <input type="number" value="${layer.db}" min="6" title="Diámetro (mm)" onchange="steelLayers[${idx}].db=+this.value; updateAll();">
+            <span style="font-size:0.8rem;">y:</span>
+            <input type="number" value="${layer.y}" title="Distancia desde fibra superior (mm)" onchange="steelLayers[${idx}].y=+this.value; updateAll();">
+            <button class="btn-sm btn-danger" onclick="steelLayers.splice(${idx},1); renderLayersUI(); updateAll();">x</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function addLayer() {
+    const h = +document.getElementById('inp_h').value;
+    steelLayers.push({ n: 2, db: 20, y: Math.round(h / 2) });
+    renderLayersUI();
+    updateAll();
+}
+
+function syncP(source) {
+    const slider = document.getElementById('slider_P');
+    const input = document.getElementById('inp_P');
+    if (source === 'slider') input.value = slider.value;
+    else slider.value = input.value;
+    updateAll();
+}
+
+function getInputs() {
+    const b = +document.getElementById('inp_b').value;
+    const h = +document.getElementById('inp_h').value;
+    const dp = +document.getElementById('inp_dp').value;
+    const fc = +document.getElementById('inp_fc').value;
+    const fy = +document.getElementById('inp_fy').value;
+    const Es = +document.getElementById('inp_Es').value;
+    const ecu = +document.getElementById('inp_ecu').value;
+    const fsu = +document.getElementById('inp_fsu').value;
+    const esu = +document.getElementById('inp_esu').value;
+    const P_target = +document.getElementById('inp_P').value; // kN
+
+    let As_total = 0;
+    const bars = steelLayers.map(l => {
+        const area = l.n * Math.PI * Math.pow(l.db / 2, 2);
+        As_total += area;
+        return { area, y: l.y }; // y desde borde superior comprimido
+    });
+    const Ag = b * h;
+    const rho = (As_total / Ag) * 100;
+    document.getElementById('steel_summary').innerHTML = `A<sub>s</sub> total: <strong>${As_total.toFixed(0)} mm²</strong> | Cuantía &rho;: <strong>${rho.toFixed(2)}%</strong>`;
+
+    return { b, h, dp, fc, fy, Es, ecu, fsu, esu, P_target, bars, As_total, Ag };
+}
+
+// Modelos Constitutivos
+function concreteStress(eps, p) {
+    const concModel = document.getElementById('sel_conc').value;
+    const tensModel = document.getElementById('sel_tens').value;
+    const fr = 0.62 * Math.sqrt(p.fc);
+    const Ec = 4700 * Math.sqrt(p.fc);
+    const ecr = fr / Ec;
+
+    // Tracción (eps < 0)
+    if (eps < 0) {
+        if (tensModel === 'ignore') return 0;
+        const e_t = -eps;
+        if (e_t <= ecr) return -Ec * e_t;
+        // Tension stiffening exponencial
+        return -fr * Math.exp(-1000 * (e_t - ecr));
+    }
+
+    // Compresión (eps >= 0)
+    let fcc = p.fc;
+    let ecc = 0.002;
+    let ecu_lim = p.ecu;
+
+    if (concModel === 'mander') {
+        const db_h = +document.getElementById('inp_db_h').value;
+        const s = +document.getElementById('inp_s').value;
+        const fyh = +document.getElementById('inp_fyh').value;
+        const bc = p.b - 2 * p.dp;
+        const hc = p.h - 2 * p.dp;
+        const Ash = 2 * Math.PI * Math.pow(db_h / 2, 2);
+        const rho_s = (Ash * (bc + hc)) / (bc * hc * s);
+        const fl = 0.5 * 0.75 * rho_s * fyh;
+        fcc = p.fc * (-1.254 + 2.254 * Math.sqrt(1 + 7.94 * fl / p.fc) - 2 * fl / p.fc);
+        ecc = 0.002 * (1 + 5 * (fcc / p.fc - 1));
+        ecu_lim = Math.max(p.ecu, 0.004 + (1.4 * rho_s * fyh * 0.09) / fcc);
+    }
+
+    if (eps > ecu_lim) return 0;
+    if (concModel === 'hognestad') {
+        if (eps <= ecc) {
+            return fcc * (2 * (eps / ecc) - Math.pow(eps / ecc, 2));
+        } else {
+            const Z = 0.15 / (ecu_lim - ecc);
+            return Math.max(0, fcc * (1 - Z * (eps - ecc)));
+        }
+    } else {
+        // Mander
+        const Esec = fcc / ecc;
+        const r = Ec / (Ec - Esec);
+        const x = eps / ecc;
+        return (fcc * x * r) / (r - 1 + Math.pow(x, r));
+    }
+}
+
+function steelStress(eps, p) {
+    const model = document.getElementById('sel_steel').value;
+    const sign = Math.sign(eps);
+    const e = Math.abs(eps);
+    const ey = p.fy / p.Es;
+    if (e > p.esu) return 0;
+
+    if (model === 'epp' || e <= ey) {
+        return sign * Math.min(e * p.Es, p.fy);
+    } else if (model === 'bilinear') {
+        const Esh = (p.fsu - p.fy) / (p.esu - ey);
+        return sign * (p.fy + Esh * (e - ey));
+    } else {
+        // Trilineal con plataforma hasta 4*ey
+        const esh = Math.min(4 * ey, 0.012);
+        if (e <= esh) return sign * p.fy;
+        const Esh = (p.fsu - p.fy) / (p.esu - esh);
+        return sign * (p.fy + Esh * (e - esh));
+    }
+}
+
+function plotConstitutive(p) {
+    const ec_arr = [], sc_arr = [];
+    for (let e = -0.001; e <= Math.max(p.ecu * 1.2, 0.008); e += 0.0001) {
+        ec_arr.push(e);
+        sc_arr.push(concreteStress(e, p));
+    }
+    const es_arr = [], ss_arr = [];
+    for (let e = -0.02; e <= 0.02; e += 0.0005) {
+        es_arr.push(e);
+        ss_arr.push(steelStress(e, p) / 10); // Escalado /10 para visualizar junto al hormigón
+    }
+    Plotly.newPlot('plot_constitutive', [
+        { x: ec_arr, y: sc_arr, name: 'Hormigón (MPa)', line: { color: '#2563eb', width: 2 } },
+        { x: es_arr, y: ss_arr, name: 'Acero (MPa / 10)', line: { color: '#dc2626', width: 2, dash: 'dot' } }
+    ], {
+        title: { text: 'Vista Previa Leyes σ - ε', font: { size: 12 } },
+        margin: { t: 30, b: 30, l: 40, r: 10 },
+        xaxis: { title: 'Deformación ε' },
+        yaxis: { title: 'Tensión (MPa)' },
+        legend: { x: 0.02, y: 0.98, font: { size: 10 } }
+    }, { displayModeBar: false });
+}
+
+// Integración por fibras para una curvatura phi y profundidad de eje neutro c
+function integrateSection(phi, c, p, nFibers = 120) {
+    const dy = p.h / nFibers;
+    const y_center = p.h / 2;
+    let P_N = 0;
+    let M_Nmm = 0;
+
+    for (let i = 0; i < nFibers; i++) {
+        const y = (i + 0.5) * dy;
+        const eps = phi * (c - y);
+        const sig = concreteStress(eps, p);
+        const F = sig * p.b * dy;
+        P_N += F;
+        M_Nmm += F * (y_center - y);
+    }
+
+    for (const bar of p.bars) {
+        const eps = phi * (c - bar.y);
+        const sig = steelStress(eps, p);
+        const F = sig * bar.area;
+        P_N += F;
+        M_Nmm += F * (y_center - bar.y);
+    }
+
+    return { P: P_N / 1000, M: M_Nmm / 1e6 }; // kN y kN·m
+}
+
+// Bisección para hallar c dado phi y P_target
+function solveNeutralAxis(phi, P_target, p) {
+    let c_low = -5 * p.h;
+    let c_high = 6 * p.h;
+    for (let iter = 0; iter < 45; iter++) {
+        const c_mid = 0.5 * (c_low + c_high);
+        const res = integrateSection(phi, c_mid, p);
+        if (res.P < P_target) c_low = c_mid;
+        else c_high = c_mid;
+    }
+    const c_sol = 0.5 * (c_low + c_high);
+    const finalRes = integrateSection(phi, c_sol, p);
+    return { c: c_sol, P: finalRes.P, M: finalRes.M };
+}
+
+function computeMPhi(P_target, p) {
+    const ecu_max = (document.getElementById('sel_conc').value === 'mander') ? Math.max(p.ecu, 0.012) : p.ecu;
+    const d_max = Math.max(...p.bars.map(b => b.y));
+    const ey = p.fy / p.Es;
+    const fr = 0.62 * Math.sqrt(p.fc);
+
+    const phis = [];
+    const phi_end = (ecu_max / (0.15 * p.h)) * 1.5;
+    const steps = 65;
+    for (let i = 1; i <= steps; i++) {
+        phis.push((phi_end * i) / steps);
+    }
+
+    const curve = [];
+    let pt_cr = null, pt_y = null, pt_max = { phi: 0, M: -1 }, pt_u = null;
+
+    for (const phi of phis) {
+        const sol = solveNeutralAxis(phi, P_target, p);
+        const eps_top = phi * sol.c;
+        const eps_bot_conc = phi * (sol.c - p.h); // negativo en tracción
+        const eps_steel_tens = -phi * (sol.c - d_max); // positivo en tracción
+
+        if (!pt_cr && (-eps_bot_conc * 4700 * Math.sqrt(p.fc) >= fr)) {
+            pt_cr = { phi, M: sol.M };
+        }
+        if (!pt_y && (eps_steel_tens >= ey || eps_top >= 0.002)) {
+            pt_y = { phi, M: sol.M };
+        }
+        if (sol.M > pt_max.M) {
+            pt_max = { phi, M: sol.M };
+        }
+        curve.push({ phi, M: sol.M, c: sol.c, eps_top, eps_steel_tens });
+
+        if (eps_top >= ecu_max || eps_steel_tens >= p.esu) {
+            pt_u = { phi, M: sol.M };
+            break;
+        }
+    }
+    if (!pt_u && curve.length > 0) pt_u = curve[curve.length - 1];
+    if (!pt_y && curve.length > 0) pt_y = curve[Math.floor(curve.length * 0.25)];
+    if (!pt_cr && curve.length > 0) pt_cr = curve[0];
+
+    return { curve, pt_cr, pt_y, pt_max, pt_u };
+}
+
+function computePMFiberEnvelope(p) {
+    const ecu_max = (document.getElementById('sel_conc').value === 'mander') ? Math.max(p.ecu, 0.012) : p.ecu;
+    const envelope = [];
+    // Tracción pura
+    const Pt = -p.As_total * p.fy / 1000;
+    envelope.push({ P: Pt, M: 0 });
+
+    // Barrido de eje neutro c desde tracción dominante hasta compresión pura
+    const c_vals = [];
+    for (let c = 0.05 * p.h; c <= 2.5 * p.h; c += 0.06 * p.h) c_vals.push(c);
+
+    for (const c of c_vals) {
+        const phi = ecu_max / c;
+        const res = integrateSection(phi, c, p);
+        if (res.M >= 0) envelope.push({ P: res.P, M: res.M });
+    }
+
+    // Compresión pura
+    const fcc_max = concreteStress(0.002, p);
+    const P0 = (fcc_max * (p.Ag - p.As_total) + p.As_total * p.fy) / 1000;
+    envelope.push({ P: P0, M: 0 });
+    return envelope;
+}
+
+function updatePestanaA(p) {
+    const ratio = p.P_target / ((p.fc * p.Ag) / 1000);
+    document.getElementById('axial_ratio').innerHTML = `P / (f'<sub>c</sub> A<sub>g</sub>) = ${ratio.toFixed(3)}`;
+
+    const resMPhi = computeMPhi(p.P_target, p);
+    const envPM = computePMFiberEnvelope(p);
+    globalResults.mphi = resMPhi.curve;
+    globalResults.pm_fiber = envPM;
+
+    const mu_phi = resMPhi.pt_y.phi > 0 ? (resMPhi.pt_u.phi / resMPhi.pt_y.phi).toFixed(2) : '-';
+    document.getElementById('mphi_metrics').innerHTML = `
+        <div class="metric-badge">Agrietamiento: <strong>M<sub>cr</sub>=${resMPhi.pt_cr.M.toFixed(1)} kN·m</strong> (&phi;=${resMPhi.pt_cr.phi.toExponential(2)})</div>
+        <div class="metric-badge">Fluencia: <strong>M<sub>y</sub>=${resMPhi.pt_y.M.toFixed(1)} kN·m</strong> (&phi;<sub>y</sub>=${resMPhi.pt_y.phi.toExponential(2)})</div>
+        <div class="metric-badge">Máximo: <strong>M<sub>máx</sub>=${resMPhi.pt_max.M.toFixed(1)} kN·m</strong> (&phi;=${resMPhi.pt_max.phi.toExponential(2)})</div>
+        <div class="metric-badge">Último: <strong>M<sub>u</sub>=${resMPhi.pt_u.M.toFixed(1)} kN·m</strong> (&phi;<sub>u</sub>=${resMPhi.pt_u.phi.toExponential(2)})</div>
+        <div class="metric-badge" style="background:#dcfce7;">Ductilidad Curvatura &mu;<sub>&phi;</sub>: <strong>${mu_phi}</strong></div>
+    `;
+
+    // Gráfico 1: M(phi)
+    Plotly.newPlot('plot_mphi', [
+        { x: resMPhi.curve.map(d => d.phi), y: resMPhi.curve.map(d => d.M), name: 'Curva M(φ)', mode: 'lines', line: { color: '#1e3a8a', width: 3 } },
+        { x: [resMPhi.pt_cr.phi], y: [resMPhi.pt_cr.M], name: 'Agrietamiento (Mcr)', mode: 'markers', marker: { size: 9, color: '#0284c7' } },
+        { x: [resMPhi.pt_y.phi], y: [resMPhi.pt_y.M], name: 'Fluencia (My)', mode: 'markers', marker: { size: 10, color: '#16a34a' } },
+        { x: [resMPhi.pt_max.phi], y: [resMPhi.pt_max.M], name: 'Máximo (Mmáx)', mode: 'markers', marker: { size: 11, color: '#dc2626', symbol: 'diamond' } },
+        { x: [resMPhi.pt_u.phi], y: [resMPhi.pt_u.M], name: 'Falla Última (Mu)', mode: 'markers', marker: { size: 10, color: '#111827', symbol: 'x' } }
+    ], {
+        title: `Curva Momento-Curvatura M(φ) — P = ${p.P_target} kN (P/f'cAg = ${ratio.toFixed(2)})`,
+        xaxis: { title: 'Curvatura φ (1/mm)' },
+        yaxis: { title: 'Momento M (kN·m)' },
+        margin: { t: 45, b: 45, l: 55, r: 20 }
+    });
+
+    // Gráfico 2: P(M) Fibras + Punto Vinculado
+    Plotly.newPlot('plot_pm_fiber', [
+        { x: envPM.map(d => d.M), y: envPM.map(d => d.P), name: 'Envolvente Fibras P(M)', mode: 'lines', line: { color: '#2563eb', width: 2.5 } },
+        { x: [resMPhi.pt_max.M], y: [p.P_target], name: `Estado Actual (Mmáx=${resMPhi.pt_max.M.toFixed(1)}, P=${p.P_target})`, mode: 'markers', marker: { size: 13, color: '#dc2626', line: { color: 'white', width: 2 } } }
+    ], {
+        title: 'Diagrama de Interacción P(M) Asociado (Fibras)',
+        xaxis: { title: 'Momento Resistente Mmáx (kN·m)', rangemode: 'tozero' },
+        yaxis: { title: 'Carga Axial P (kN)' },
+        margin: { t: 45, b: 45, l: 55, r: 20 }
+    });
+}
+
+// PESTAÑA B: BLOQUE DE WHITNEY (ACI 318-19 / NCh430)
+function getBeta1(fc) {
+    if (fc <= 28) return 0.85;
+    return Math.max(0.65, 0.85 - (0.05 * (fc - 28)) / 7);
+}
+
+function getPhiACI(et, ey) {
+    if (et <= ey) return 0.65;
+    if (et >= ey + 0.003) return 0.90;
+    return 0.65 + 0.25 * ((et - ey) / 0.003);
+}
+
+function whitneyPoint(c, p, beta1) {
+    const ecu = 0.003;
+    const ey = p.fy / p.Es;
+    const y_center = p.h / 2;
+    const d_max = Math.max(...p.bars.map(b => b.y));
+    const a = Math.min(beta1 * c, p.h);
+
+    const Cc = 0.85 * p.fc * p.b * a;
+    let Pn_N = Cc;
+    let Mn_Nmm = Cc * (y_center - a / 2);
+
+    for (const bar of p.bars) {
+        const es = ecu * ((c - bar.y) / c);
+        const fs = Math.max(-p.fy, Math.min(p.fy, es * p.Es));
+        const Fs = fs * bar.area;
+        Pn_N += Fs;
+        Mn_Nmm += Fs * (y_center - bar.y);
+    }
+
+    const et = ecu * ((d_max - c) / c);
+    const phi = getPhiACI(et, ey);
+    const Pn = Pn_N / 1000;
+    const Mn = Mn_Nmm / 1e6;
+    return { c, Pn, Mn, phi, phiPn: phi * Pn, phiMn: phi * Mn, et };
+}
+
+function updateWhitney() {
+    const p = getInputs();
+    const beta1 = getBeta1(p.fc);
+    document.getElementById('beta1_label').innerHTML = `&beta;<sub>1</sub> = ${beta1.toFixed(3)}`;
+    const d_max = Math.max(...p.bars.map(b => b.y));
+    const ey = p.fy / p.Es;
+
+    // Puntos clave
+    const P0 = (0.85 * p.fc * (p.Ag - p.As_total) + p.As_total * p.fy) / 1000;
+    const Pn_max = 0.80 * P0;
+    const phi_Pn_max = 0.65 * Pn_max;
+
+    const c_bal = (0.003 / (0.003 + ey)) * d_max;
+    const pt_bal = whitneyPoint(c_bal, p, beta1);
+
+    const c_005 = (0.003 / (0.003 + 0.005)) * d_max;
+    const pt_005 = whitneyPoint(c_005, p, beta1);
+
+    const Pt = -p.As_total * p.fy / 1000;
+
+    // Barrido de curva Whitney
+    const curveW = [{ Pn: Pt, Mn: 0, phiPn: 0.9 * Pt, phiMn: 0 }];
+    let pt_flex = { Pn: 0, Mn: 0, phiPn: 0, phiMn: 0, c: 0, phi: 0.9 };
+
+    for (let c = 0.05 * d_max; c <= 1.8 * p.h; c += 0.02 * p.h) {
+        const pt = whitneyPoint(c, p, beta1);
+        if (pt.Mn >= 0) {
+            curveW.push(pt);
+            if (Math.abs(pt.Pn) < Math.abs(pt_flex.Pn) || pt_flex.Mn === 0) {
+                if (pt.Pn >= -50 && pt.Pn <= 50) pt_flex = pt;
+            }
+        }
+    }
+    curveW.push({ Pn: P0, Mn: 0, phiPn: 0.65 * P0, phiMn: 0 });
+    globalResults.pm_whitney = curveW;
+
+    // Tabla puntos clave
+    const tbody = document.querySelector('#tbl_key_points tbody');
+    tbody.innerHTML = `
+        <tr><td>Compresión Pura (P₀)</td><td>∞</td><td>${P0.toFixed(1)}</td><td>0.0</td><td>0.65</td><td>${(0.65*P0).toFixed(1)}</td><td>0.0</td></tr>
+        <tr><td>Máx. Normativo (0.80 P₀)</td><td>-</td><td>${Pn_max.toFixed(1)}</td><td>-</td><td>0.65</td><td>${phi_Pn_max.toFixed(1)}</td><td>-</td></tr>
+        <tr><td>Falla Balanceada (εₜ=εᵧ)</td><td>${pt_bal.c.toFixed(1)}</td><td>${pt_bal.Pn.toFixed(1)}</td><td>${pt_bal.Mn.toFixed(1)}</td><td>${pt_bal.phi.toFixed(2)}</td><td>${pt_bal.phiPn.toFixed(1)}</td><td>${pt_bal.phiMn.toFixed(1)}</td></tr>
+        <tr><td>Límite Tracción (εₜ=0.005)</td><td>${pt_005.c.toFixed(1)}</td><td>${pt_005.Pn.toFixed(1)}</td><td>${pt_005.Mn.toFixed(1)}</td><td>${pt_005.phi.toFixed(2)}</td><td>${pt_005.phiPn.toFixed(1)}</td><td>${pt_005.phiMn.toFixed(1)}</td></tr>
+        <tr><td>Flexión Pura (Pn ≈ 0)</td><td>${pt_flex.c.toFixed(1)}</td><td>${pt_flex.Pn.toFixed(1)}</td><td>${pt_flex.Mn.toFixed(1)}</td><td>${pt_flex.phi.toFixed(2)}</td><td>${pt_flex.phiPn.toFixed(1)}</td><td>${pt_flex.phiMn.toFixed(1)}</td></tr>
+        <tr><td>Tracción Pura (Pt)</td><td>0</td><td>${Pt.toFixed(1)}</td><td>0.0</td><td>0.90</td><td>${(0.9*Pt).toFixed(1)}</td><td>0.0</td></tr>
+    `;
+
+    // Trazas Gráfico Whitney
+    const traces = [
+        { x: curveW.map(d => d.Mn), y: curveW.map(d => d.Pn), name: 'Nominal Pn(Mn)', mode: 'lines', line: { color: '#1e3a8a', width: 2.5 } },
+        { x: curveW.map(d => Math.min(d.phiPn, phi_Pn_max) === phi_Pn_max ? d.phiMn : d.phiMn), y: curveW.map(d => Math.min(d.phiPn, phi_Pn_max)), name: 'Diseño φPn(Mn)', mode: 'lines', line: { color: '#059669', width: 3 } },
+        { x: [pt_bal.Mn, pt_005.Mn], y: [pt_bal.Pn, pt_005.Pn], name: 'Puntos Clave (Bal / 0.005)', mode: 'markers', marker: { size: 9, color: '#d97706' } }
+    ];
+
+    if (document.getElementById('chk_overlay').checked && globalResults.pm_fiber.length > 0) {
+        traces.push({
+            x: globalResults.pm_fiber.map(d => d.M),
+            y: globalResults.pm_fiber.map(d => d.P),
+            name: 'Fibras P(M) (Pestaña A)',
+            mode: 'lines',
+            line: { color: '#dc2626', width: 2, dash: 'dash' }
+        });
+    }
+
+    // Evaluar solicitaciones (Pu, Mu)
+    const loadBody = document.querySelector('#tbl_loads tbody');
+    loadBody.innerHTML = '';
+    const okX = [], okY = [], failX = [], failY = [];
+
+    designLoads.forEach((ld, idx) => {
+        const inside = checkInsideDesign(ld.Pu, ld.Mu, curveW, phi_Pn_max);
+        if (inside) { okX.push(ld.Mu); okY.push(ld.Pu); }
+        else { failX.push(ld.Mu); failY.push(ld.Pu); }
+
+        loadBody.innerHTML += `
+            <tr>
+                <td>C${idx+1}</td>
+                <td>${ld.Pu}</td>
+                <td>${ld.Mu}</td>
+                <td class="${inside ? 'status-ok' : 'status-fail'}">${inside ? 'CUMPLE' : 'NO CUMPLE'}</td>
+                <td><button class="btn-sm btn-danger" onclick="designLoads.splice(${idx},1); updateWhitney();">x</button></td>
+            </tr>
+        `;
+    });
+
+    if (okX.length) traces.push({ x: okX, y: okY, name: 'Solicitación Cumple', mode: 'markers', marker: { size: 10, color: '#16a34a', symbol: 'circle' } });
+    if (failX.length) traces.push({ x: failX, y: failY, name: 'Solicitación Falla', mode: 'markers', marker: { size: 11, color: '#dc2626', symbol: 'x' } });
+
+    Plotly.newPlot('plot_whitney', traces, {
+        title: 'Diagrama de Interacción ACI 318-19 / NCh430',
+        xaxis: { title: 'Momento M (kN·m)', rangemode: 'tozero' },
+        yaxis: { title: 'Carga Axial P (kN)' },
+        margin: { t: 45, b: 45, l: 55, r: 20 }
+    });
+}
+
+function checkInsideDesign(Pu, Mu, curveW, phi_Pn_max) {
+    if (Pu > phi_Pn_max || Pu < curveW[0].phiPn) return false;
+    for (let i = 0; i < curveW.length - 1; i++) {
+        const p1 = curveW[i].phiPn, m1 = curveW[i].phiMn;
+        const p2 = curveW[i+1].phiPn, m2 = curveW[i+1].phiMn;
+        if ((Pu >= p1 && Pu <= p2) || (Pu <= p1 && Pu >= p2)) {
+            const t = (p2 === p1) ? 0 : (Pu - p1) / (p2 - p1);
+            const m_cap = m1 + t * (m2 - m1);
+            if (Mu <= m_cap) return true;
+        }
+    }
+    return false;
+}
+
+function addLoad() {
+    const Pu = +document.getElementById('inp_Pu').value;
+    const Mu = +document.getElementById('inp_Mu').value;
+    designLoads.push({ Pu, Mu });
+    updateWhitney();
+}
+
+function exportCSV() {
+    let csv = "Curva_M_Phi\nCurvatura_1_mm,Momento_kNm,Eje_Neutro_mm\n";
+    globalResults.mphi.forEach(r => { csv += `${r.phi.toExponential(4)},${r.M.toFixed(3)},${r.c.toFixed(2)}\n`; });
+    csv += "\nDiagrama_PM_Fibras\nMomento_kNm,Carga_Axial_kN\n";
+    globalResults.pm_fiber.forEach(r => { csv += `${r.M.toFixed(3)},${r.P.toFixed(3)}\n`; });
+    csv += "\nDiagrama_PM_Whitney\nPn_kN,Mn_kNm,phi,phiPn_kN,phiMn_kNm\n";
+    globalResults.pm_whitney.forEach(r => { csv += `${r.Pn.toFixed(3)},${r.Mn.toFixed(3)},${(r.phi||0).toFixed(3)},${r.phiPn.toFixed(3)},${r.phiMn.toFixed(3)}\n`; });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "Resultados_Columna_Tarea3.csv";
+    a.click();
+}
+
+function updateAll() {
+    const p = getInputs();
+    plotConstitutive(p);
+    updatePestanaA(p);
+    updateWhitney();
+}
+
+// Inicialización
+renderLayersUI();
+updateAll();
+</script>
+</body>
+</html>
